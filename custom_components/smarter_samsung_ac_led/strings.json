@@ -1,0 +1,42 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "SmartThings Token Setup",
+        "description": "Enter your SmartThings Personal Access Token to connect to your Samsung Air Conditioner.\n\nTo get a token:\n1. Go to {setup_url}\n2. Click 'Generate new token'\n3. Give it a name like 'Home Assistant'\n4. Select the required permissions\n5. Copy the token and paste it below",
+        "data": {
+          "token": "SmartThings Personal Access Token"
+        }
+      },
+      "device_selection": {
+        "title": "Select Your Samsung Air Conditioner",
+        "description": "Found {device_count} compatible Samsung air conditioner(s). Please select the one you want to control:",
+        "data": {
+          "device_selection": "Air Conditioner"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to SmartThings API. Please check your token and internet connection.",
+      "no_compatible_devices": "No compatible Samsung air conditioners with LED control were found in your SmartThings account.",
+      "no_led_capability": "The selected device does not support LED control.",
+      "device_not_found": "The selected device could not be found. Please try again.",
+      "unknown": "An unexpected error occurred. Please try again."
+    },
+    "abort": {
+      "already_configured": "This device is already configured in Home Assistant.",
+      "single_instance_allowed": "Only one instance of this integration is allowed."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smarter Samsung AC LED Options",
+        "description": "Configure how often Home Assistant checks the AC LED status. Lower values provide faster updates but may use more API requests.\n\nRecommended: 30 seconds for normal use, 10-15 seconds for frequent control.",
+        "data": {
+          "scan_interval": "Update interval (5-300 seconds)"
+        }
+      }
+    }
+  }
+}

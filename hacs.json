@@ -1,0 +1,7 @@
+{
+  "name": "Smarter Samsung AC LED",
+  "zip_release": true,
+  "filename": "smarter_samsung_ac_led.zip",
+  "hide_default_branch": true,
+  "homeassistant": "2023.1.0"
+}
