@@ -25,13 +25,21 @@
     },
     "abort": {
       "already_configured": "This device is already configured in Home Assistant.",
-      "single_instance_allowed": "Only one instance of this integration is allowed."
+      "single_instance_allowed": "Only one instance of this integration is allowed.",
+      "no_unconfigured_devices": "All compatible Samsung air conditioners are already configured in Home Assistant."
+    }
+  },
+  "entity": {
+    "light": {
+      "led": {
+        "name": "LED"
+      }
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Smarter Samsung AC LED Options",
+        "title": "Samsung AC LED Options", 
         "description": "Configure how often Home Assistant checks the AC LED status. Lower values provide faster updates but may use more API requests.\n\nRecommended: 30 seconds for normal use, 10-15 seconds for frequent control.",
         "data": {
           "scan_interval": "Update interval (5-300 seconds)"

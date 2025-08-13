@@ -171,10 +171,23 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the device selection step."""
         
         if user_input is None:
-            # Create device options for dropdown
+            # Get already configured device IDs
+            configured_device_ids = set()
+            for entry in self._async_current_entries():
+                if entry.domain == DOMAIN:
+                    device_id = entry.data.get("device_id")
+                    if device_id:
+                        configured_device_ids.add(device_id)
+            
+            # Create device options for dropdown, excluding already configured devices
             device_options = {}
             for device in self.compatible_devices:
                 device_id = device.get("deviceId")
+                
+                # Skip devices that are already configured
+                if device_id in configured_device_ids:
+                    continue
+                    
                 device_name = device.get("name", f"Unknown Device {device_id[:8]}")
                 device_label = device.get("label", device_name)  # Use label if available, fallback to name
                 room_name = device.get("roomName", "")
@@ -186,6 +199,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     display_name = device_label
                 
                 device_options[device_id] = display_name
+            
+            # Check if no unconfigured devices are available
+            if not device_options:
+                return self.async_abort(reason="no_unconfigured_devices")
             
             return self.async_show_form(
                 step_id="device_selection",
@@ -246,9 +263,21 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
         # Show device selection form again with errors
+        configured_device_ids = set()
+        for entry in self._async_current_entries():
+            if entry.domain == DOMAIN:
+                device_id = entry.data.get("device_id")
+                if device_id:
+                    configured_device_ids.add(device_id)
+        
         device_options = {}
         for device in self.compatible_devices:
             device_id = device.get("deviceId")
+            
+            # Skip devices that are already configured
+            if device_id in configured_device_ids:
+                continue
+                
             device_name = device.get("name", f"Unknown Device {device_id[:8]}")
             device_label = device.get("label", device_name)  # Use label if available, fallback to name
             room_name = device.get("roomName", "")
