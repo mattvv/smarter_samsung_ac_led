@@ -39,16 +39,13 @@ If you own a Samsung AC, you've probably experienced the frustration of that alw
 
 2. Search for "Smarter Samsung AC LED"
 
-3. Enter your SmartThings Personal Access Token. You should already have this if you have previously setup your AC with Home Assistant, but if not:
-   - Go to [SmartThings Personal Access Token](https://account.smartthings.com/tokens)
-   - Click "Generate new token"
-   - Name it "Home Assistant"
-   - Select required permissions
-   - Copy and paste the token
+3. Enter your SmartThings Personal Access Token (PAT).
+   
+   ⚠️ **IMPORTANT**: You must use a PAT issued before December 2024, which have an indefinite lifespan. Newer PATs only live for 24 hours, which means this integration would only work for 24 hours.
 
-4. Select your AC device from the list
+5. Select your AC device from the list
 
-5. Configure polling interval (optional)
+6. Configure polling interval (optional)
    - Default: 30 seconds
    - Fast updates: 10-15 seconds
    - Power/CPU saving: 60+ seconds
@@ -95,7 +92,7 @@ Access these through **Settings** → **Devices & Services** → **Smarter Samsu
 
 ### Device Not Found
 - Ensure your AC is properly connected to SmartThings
-- Verify your API token has the correct permissions
+- Verify that your Personal Access Token (PAT) has the correct permissions and has not expired
 - Check that your AC model supports LED control
 
 ### LED Control Not Working
