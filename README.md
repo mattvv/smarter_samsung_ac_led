@@ -20,7 +20,7 @@ If you own a Samsung AC, you've probably experienced the frustration of that alw
 
 1. Add this repository to HACS as a custom repository:
    - Go to HACS → Integrations → ⋮ → Custom repositories
-   - Add: `https://github.com/sfox38/smarter-samsung-ac-led`
+   - Add: `https://github.com/sfox38/smarter_samsung_ac_led`
    - Category: Integration
 
 2. Install "Smarter Samsung AC LED" from HACS
@@ -40,7 +40,7 @@ If you own a Samsung AC, you've probably experienced the frustration of that alw
 2. Search for "Smarter Samsung AC LED"
 
 3. Enter your SmartThings Personal Access Token (PAT).
-   
+
    ⚠️ **IMPORTANT**: You must use a PAT issued before December 2024, which have an indefinite lifespan. Newer PATs only live for 24 hours, which means this integration would only work for 24 hours.
 
 5. Select your AC device from the list
@@ -74,7 +74,7 @@ automation:
 
 ## Compatibility
 
-This integration has been tested with Samsung WindFree air conditioners but should work with other Samsung SmartThings AC models that support LED control. 
+This integration has been tested with Samsung WindFree air conditioners but should work with other Samsung SmartThings AC models that support LED control.
 
 **Supported Models:**
 - WindFree series (confirmed working)
