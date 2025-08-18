@@ -91,8 +91,8 @@ class SmartThingsController:
         main_component = components.get("main", {})
 
         # DEBUG: Log all available capabilities
-        _LOGGER.warning("=== DEBUG: All capabilities for device %s ===", device_id)
-        _LOGGER.warning("Main component capabilities: %s", list(main_component.keys()))
+        _LOGGER.info("=== DEBUG: All capabilities for device %s ===", device_id)
+        _LOGGER.info("Main component capabilities: %s", list(main_component.keys()))
 
         # Try Samsung-specific lighting capability first
         if "samsungce.airConditionerLighting" in main_component:
@@ -105,7 +105,7 @@ class SmartThingsController:
         # NEW: Check for Samsung execute capability with display options
         if "execute" in main_component:
             execute_data = main_component["execute"]
-            _LOGGER.warning("Found execute capability: %s", execute_data)
+            _LOGGER.info("Found execute capability: %s", execute_data)
 
             # For execute capability, we can't determine current state easily
             # since it's a command interface, not a status interface
@@ -115,7 +115,7 @@ class SmartThingsController:
         # NEW: Check for custom.doNotDisturbMode (might control display)
         if "custom.doNotDisturbMode" in main_component:
             dnd_data = main_component["custom.doNotDisturbMode"]
-            _LOGGER.warning("Found doNotDisturbMode: %s", dnd_data)
+            _LOGGER.info("Found doNotDisturbMode: %s", dnd_data)
             if isinstance(dnd_data, dict):
                 # DoNotDisturb might control display - if enabled, display is off
                 dnd_value = dnd_data.get("value")
@@ -126,7 +126,7 @@ class SmartThingsController:
         # NEW: Check for custom.airConditionerOptionalMode
         if "custom.airConditionerOptionalMode" in main_component:
             optional_mode_data = main_component["custom.airConditionerOptionalMode"]
-            _LOGGER.warning("Found airConditionerOptionalMode: %s", optional_mode_data)
+            _LOGGER.info("Found airConditionerOptionalMode: %s", optional_mode_data)
             if isinstance(optional_mode_data, dict):
                 mode_value = optional_mode_data.get("value")
                 # Some optional modes might indicate display state
@@ -284,7 +284,7 @@ class SmartThingsController:
             }]
         }
 
-        _LOGGER.warning("Sending Samsung execute display command: %s", command_data)
+        _LOGGER.debug("Sending Samsung execute display command: %s", command_data)
 
         try:
             response = requests.post(
