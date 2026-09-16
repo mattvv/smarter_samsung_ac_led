@@ -1,345 +1,183 @@
-"""Config flow for Samsung AC LED Controller integration."""
+"""Config flow for Samsung AC LED Controller.
+
+Setup is four steps:
+
+  1. paste a SmartThings Personal Access Token
+  2. we register an API_ONLY SmartApp with it and show an authorize link
+  3. you approve, land on a dead localhost URL, and paste that URL back
+  4. pick which air conditioner to control
+
+The PAT is used only in step 2 and is never stored. From then on the
+integration runs on an OAuth refresh token, which is what makes it survive
+SmartThings' 24-hour PAT expiry.
+"""
+from __future__ import annotations
+
 import logging
+import re
+from typing import Any
+from urllib.parse import parse_qs, urlparse
+
 import voluptuous as vol
-from typing import Any, Dict, Optional
 
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.storage import Store
 
-from .const import DOMAIN, CONF_TOKEN, CONF_DEVICE_ID, DEFAULT_SCAN_INTERVAL
+from . import oauth
+from .const import (
+    CONF_ACCESS_TOKEN,
+    CONF_APP_NAME,
+    CONF_CLIENT_ID,
+    CONF_CLIENT_SECRET,
+    CONF_DEVICE_ID,
+    CONF_DEVICE_NAME,
+    CONF_EXPIRES_AT,
+    CONF_REFRESH_TOKEN,
+    DOMAIN,
+)
 from .smartthings_api import SmartThingsController
 
 _LOGGER = logging.getLogger(__name__)
 
-STORAGE_VERSION = 1
-STORAGE_KEY = f"{DOMAIN}_tokens"
-
-# Configuration constants
-CONF_SCAN_INTERVAL = "scan_interval"
-MIN_SCAN_INTERVAL = 5  # seconds
-MAX_SCAN_INTERVAL = 300  # seconds
-
-
-def get_token_schema(default_token: str = "") -> vol.Schema:
-    """Get the token input schema with optional default token."""
-    return vol.Schema({
-        vol.Required("token", default=default_token): str,
-    })
-
-
-def get_device_selection_schema(devices: Dict[str, str]) -> vol.Schema:
-    """Get the device selection schema."""
-    return vol.Schema({
-        vol.Required("device_selection"): vol.In(devices),
-    })
-
-
-def get_options_schema(current_interval: int = DEFAULT_SCAN_INTERVAL) -> vol.Schema:
-    """Get the options schema."""
-    return vol.Schema({
-        vol.Optional(
-            CONF_SCAN_INTERVAL,
-            default=current_interval
-        ): vol.All(vol.Coerce(int), vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL)),
-    })
-
-
-async def validate_token(hass: HomeAssistant, token: str) -> list[dict]:
-    """Validate the token and return list of compatible devices."""
-    
-    controller = SmartThingsController(token)
-    
-    # Test the connection by getting devices
-    devices = await hass.async_add_executor_job(controller.get_devices)
-    if not devices:
-        raise CannotConnect
-    
-    # Filter devices that have LED capability
-    compatible_devices = []
-    for device in devices:
-        device_id = device.get("deviceId")
-        if not device_id:
-            continue
-            
-        # Check if device has LED capability
-        led_status = await hass.async_add_executor_job(controller.get_led_status, device_id)
-        if led_status is not None:
-            compatible_devices.append(device)
-    
-    if not compatible_devices:
-        raise NoCompatibleDevices
-    
-    return compatible_devices
-
-
-async def validate_device_selection(hass: HomeAssistant, token: str, device_id: str, device_name: str) -> dict[str, Any]:
-    """Validate the selected device."""
-    
-    controller = SmartThingsController(token)
-    
-    # Test LED capability one more time
-    led_status = await hass.async_add_executor_job(controller.get_led_status, device_id)
-    if led_status is None:
-        raise NoLEDCapability
-    
-    # Return info that you want to store in the config entry.
-    return {
-        "title": f"{device_name} LED",
-        "device_id": device_id,
-        "device_name": device_name
-    }
+UUID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Samsung AC LED Controller."""
+    """Handle the setup handshake."""
 
-    VERSION = 1
+    VERSION = 2
 
-    def __init__(self):
-        """Initialize config flow."""
-        self.token = None
-        self.compatible_devices = []
+    def __init__(self) -> None:
+        self._app: dict[str, str] = {}
+        self._tokens: dict[str, Any] = {}
+        self._devices: list[dict[str, Any]] = []
 
-    @staticmethod
-    @callback
-    def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
-    ) -> config_entries.OptionsFlow:
-        """Create the options flow."""
-        return OptionsFlowHandler(config_entry)
+    # ------------------------------------------------------------- step 1
 
-    async def async_step_user(
-        self, user_input: Optional[Dict[str, Any]] = None
-    ) -> FlowResult:
-        """Handle the initial step - token input."""
-        
-        # Load previously saved token if available
-        stored_data = {}
-        if self.hass:
-            store = Store(self.hass, STORAGE_VERSION, STORAGE_KEY)
-            stored_data = await store.async_load() or {}
-        
-        default_token = stored_data.get("last_used_token", "")
-        
-        if user_input is None:
-            return self.async_show_form(
-                step_id="user", 
-                data_schema=get_token_schema(default_token),
-                description_placeholders={
-                    "setup_url": "https://account.smartthings.com/tokens"
-                }
-            )
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Collect a Personal Access Token and register the SmartApp."""
+        errors: dict[str, str] = {}
 
-        errors = {}
-
-        try:
-            # Validate token and get compatible devices
-            self.compatible_devices = await validate_token(self.hass, user_input["token"])
-            self.token = user_input["token"]
-            
-            # Save the token for future use
-            if self.hass:
-                store = Store(self.hass, STORAGE_VERSION, STORAGE_KEY)
-                await store.async_save({"last_used_token": user_input["token"]})
-                
-        except CannotConnect:
-            errors["base"] = "cannot_connect"
-        except NoCompatibleDevices:
-            errors["base"] = "no_compatible_devices"
-        except Exception:  # pylint: disable=broad-except
-            _LOGGER.exception("Unexpected exception")
-            errors["base"] = "unknown"
-        else:
-            # Move to device selection step
-            return await self.async_step_device_selection()
-
-        return self.async_show_form(
-            step_id="user", 
-            data_schema=get_token_schema(user_input.get("token", default_token)), 
-            errors=errors,
-            description_placeholders={
-                "setup_url": "https://account.smartthings.com/tokens"
-            }
-        )
-
-    async def async_step_device_selection(
-        self, user_input: Optional[Dict[str, Any]] = None
-    ) -> FlowResult:
-        """Handle the device selection step."""
-        
-        if user_input is None:
-            # Get already configured device IDs
-            configured_device_ids = set()
-            for entry in self._async_current_entries():
-                if entry.domain == DOMAIN:
-                    device_id = entry.data.get("device_id")
-                    if device_id:
-                        configured_device_ids.add(device_id)
-            
-            # Create device options for dropdown, excluding already configured devices
-            device_options = {}
-            for device in self.compatible_devices:
-                device_id = device.get("deviceId")
-                
-                # Skip devices that are already configured
-                if device_id in configured_device_ids:
-                    continue
-                    
-                device_name = device.get("name", f"Unknown Device {device_id[:8]}")
-                device_label = device.get("label", device_name)  # Use label if available, fallback to name
-                room_name = device.get("roomName", "")
-                
-                # Use the user-defined name, optionally with room info
-                if room_name and room_name.lower() not in device_label.lower():
-                    display_name = f"{device_label} ({room_name})"
-                else:
-                    display_name = device_label
-                
-                device_options[device_id] = display_name
-            
-            # Check if no unconfigured devices are available
-            if not device_options:
-                return self.async_abort(reason="no_unconfigured_devices")
-            
-            return self.async_show_form(
-                step_id="device_selection",
-                data_schema=get_device_selection_schema(device_options),
-                description_placeholders={
-                    "device_count": str(len(device_options))
-                }
-            )
-
-        # Process device selection
-        selected_device_id = user_input["device_selection"]
-        
-        # Find the selected device
-        selected_device = None
-        for device in self.compatible_devices:
-            if device.get("deviceId") == selected_device_id:
-                selected_device = device
-                break
-        
-        if not selected_device:
-            return self.async_show_form(
-                step_id="device_selection",
-                data_schema=get_device_selection_schema({selected_device_id: "Selected Device"}),
-                errors={"device_selection": "device_not_found"}
-            )
-
-        errors = {}
-        try:
-            device_name = selected_device.get("name", "Samsung AC")
-            info = await validate_device_selection(
-                self.hass, 
-                self.token, 
-                selected_device_id, 
-                device_name
-            )
-                
-        except NoLEDCapability:
-            errors["base"] = "no_led_capability"
-        except Exception:  # pylint: disable=broad-except
-            _LOGGER.exception("Unexpected exception")
-            errors["base"] = "unknown"
-        else:
-            # Check if already configured
-            await self.async_set_unique_id(selected_device_id)
-            self._abort_if_unique_id_configured()
-            
-            # Create the config entry with default options
-            return self.async_create_entry(
-                title=info["title"], 
-                data={
-                    "token": self.token,
-                    "device_id": info["device_id"],
-                    "device_name": info["device_name"]
-                },
-                options={
-                    CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL
-                }
-            )
-
-        # Show device selection form again with errors
-        configured_device_ids = set()
-        for entry in self._async_current_entries():
-            if entry.domain == DOMAIN:
-                device_id = entry.data.get("device_id")
-                if device_id:
-                    configured_device_ids.add(device_id)
-        
-        device_options = {}
-        for device in self.compatible_devices:
-            device_id = device.get("deviceId")
-            
-            # Skip devices that are already configured
-            if device_id in configured_device_ids:
-                continue
-                
-            device_name = device.get("name", f"Unknown Device {device_id[:8]}")
-            device_label = device.get("label", device_name)  # Use label if available, fallback to name
-            room_name = device.get("roomName", "")
-            
-            # Use the user-defined name, optionally with room info
-            if room_name and room_name.lower() not in device_label.lower():
-                display_name = f"{device_label} ({room_name})"
-            else:
-                display_name = device_label
-            
-            device_options[device_id] = display_name
-
-        return self.async_show_form(
-            step_id="device_selection",
-            data_schema=get_device_selection_schema(device_options),
-            errors=errors,
-            description_placeholders={
-                "device_count": str(len(device_options))
-            }
-        )
-
-
-class OptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle options flow for Samsung AC LED Controller."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
-
-    async def async_step_init(
-        self, user_input: Optional[Dict[str, Any]] = None
-    ) -> FlowResult:
-        """Manage the options."""
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
-
-        # Get current scan interval from options or use default
-        current_interval = self.config_entry.options.get(
-            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
-        )
+            pat = user_input["pat"].strip()
+            if not UUID_RE.match(pat):
+                errors["pat"] = "invalid_token_format"
+            else:
+                try:
+                    self._app = await self.hass.async_add_executor_job(
+                        oauth.create_api_only_app, pat
+                    )
+                except oauth.OAuthError as err:
+                    _LOGGER.error("SmartApp registration failed: %s", err)
+                    errors["base"] = "cannot_create_app"
+                else:
+                    return await self.async_step_authorize()
 
         return self.async_show_form(
-            step_id="init",
-            data_schema=get_options_schema(current_interval),
+            step_id="user",
+            data_schema=vol.Schema({vol.Required("pat"): str}),
+            errors=errors,
+            description_placeholders={"tokens_url": "https://account.smartthings.com/tokens"},
+        )
+
+    # ------------------------------------------------------------- step 2/3
+
+    async def async_step_authorize(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Show the authorize link, then accept the pasted redirect URL."""
+        errors: dict[str, str] = {}
+        authorize_url = oauth.build_authorize_url(self._app["client_id"])
+
+        if user_input is not None:
+            code = _extract_code(user_input["redirect_url"])
+            if not code:
+                errors["redirect_url"] = "no_code_found"
+            else:
+                try:
+                    self._tokens = await self.hass.async_add_executor_job(
+                        oauth.exchange_code,
+                        self._app["client_id"],
+                        self._app["client_secret"],
+                        code,
+                    )
+                except oauth.OAuthError as err:
+                    _LOGGER.error("Code exchange failed: %s", err)
+                    errors["base"] = "exchange_failed"
+                else:
+                    return await self.async_step_pick_device()
+
+        return self.async_show_form(
+            step_id="authorize",
+            data_schema=vol.Schema({vol.Required("redirect_url"): str}),
+            errors=errors,
+            description_placeholders={"authorize_url": authorize_url},
+        )
+
+    # ------------------------------------------------------------- step 4
+
+    async def async_step_pick_device(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Choose which air conditioner this entry controls."""
+        errors: dict[str, str] = {}
+        controller = self._controller()
+
+        if not self._devices:
+            try:
+                self._devices = await self.hass.async_add_executor_job(
+                    controller.get_ac_devices
+                )
+            except Exception as err:  # noqa: BLE001 - surfaced to the user
+                _LOGGER.error("Could not list devices: %s", err)
+                return self.async_abort(reason="cannot_connect")
+            if not self._devices:
+                return self.async_abort(reason="no_compatible_devices")
+
+        choices = {
+            d["deviceId"]: (d.get("label") or d.get("name") or d["deviceId"])
+            for d in self._devices
+        }
+
+        if user_input is not None:
+            device_id = user_input[CONF_DEVICE_ID]
+            await self.async_set_unique_id(device_id)
+            self._abort_if_unique_id_configured()
+            name = choices[device_id]
+            return self.async_create_entry(
+                title=f"{name} LED",
+                data={
+                    CONF_CLIENT_ID: self._app["client_id"],
+                    CONF_CLIENT_SECRET: self._app["client_secret"],
+                    CONF_APP_NAME: self._app["app_name"],
+                    CONF_REFRESH_TOKEN: self._tokens["refresh_token"],
+                    CONF_ACCESS_TOKEN: self._tokens["access_token"],
+                    CONF_EXPIRES_AT: self._tokens["expires_at"],
+                    CONF_DEVICE_ID: device_id,
+                    CONF_DEVICE_NAME: name,
+                },
+            )
+
+        return self.async_show_form(
+            step_id="pick_device",
+            data_schema=vol.Schema({vol.Required(CONF_DEVICE_ID): vol.In(choices)}),
+            errors=errors,
+        )
+
+    def _controller(self) -> SmartThingsController:
+        return SmartThingsController(
+            client_id=self._app["client_id"],
+            client_secret=self._app["client_secret"],
+            refresh_token=self._tokens["refresh_token"],
+            access_token=self._tokens["access_token"],
+            expires_at=self._tokens["expires_at"],
         )
 
 
-class CannotConnect(Exception):
-    """Error to indicate we cannot connect."""
+def _extract_code(pasted: str) -> str | None:
+    """Pull the ?code= value out of a pasted redirect URL.
 
-
-class NoACFound(Exception):
-    """Error to indicate no Samsung AC was found."""
-
-
-class InvalidDeviceId(Exception):
-    """Error to indicate the device ID is invalid."""
-
-
-class NoLEDCapability(Exception):
-    """Error to indicate the device doesn't have LED capability."""
-
-
-class NoCompatibleDevices(Exception):
-    """Error to indicate no compatible devices were found."""
+    Accepts a bare code too, since people often copy just that.
+    """
+    pasted = pasted.strip()
+    if "?" not in pasted and "=" not in pasted:
+        return pasted or None
+    query = parse_qs(urlparse(pasted).query)
+    values = query.get("code")
+    return values[0] if values else None
