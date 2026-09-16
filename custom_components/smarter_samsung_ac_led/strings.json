@@ -2,49 +2,30 @@
   "config": {
     "step": {
       "user": {
-        "title": "SmartThings Token Setup",
-        "description": "Enter your SmartThings Personal Access Token to connect to your Samsung Air Conditioner.\n\nTo get a token:\n1. Go to {setup_url}\n2. Click 'Generate new token'\n3. Give it a name like 'Home Assistant'\n4. Select the required permissions\n5. Copy the token and paste it below",
-        "data": {
-          "token": "SmartThings Personal Access Token"
-        }
+        "title": "SmartThings access",
+        "description": "Create a Personal Access Token at {tokens_url} with the device list, read and execute scopes, then paste it below.\n\nThe token is used once to register an app and is never stored, so it does not matter that SmartThings expires tokens after 24 hours.",
+        "data": { "pat": "Personal Access Token" }
       },
-      "device_selection": {
-        "title": "Select Your Samsung Air Conditioner",
-        "description": "Found {device_count} compatible Samsung air conditioner(s). Please select the one you want to control:",
-        "data": {
-          "device_selection": "Air Conditioner"
-        }
+      "authorize": {
+        "title": "Authorize Home Assistant",
+        "description": "Open this link and approve access:\n\n{authorize_url}\n\nYour browser will then land on a localhost address that fails to load. That is expected. Copy the full URL from the address bar and paste it below.",
+        "data": { "redirect_url": "Pasted URL" }
+      },
+      "pick_device": {
+        "title": "Choose the air conditioner",
+        "data": { "device_id": "Air conditioner" }
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect to SmartThings API. Please check your token and internet connection.",
-      "no_compatible_devices": "No compatible Samsung air conditioners with LED control were found in your SmartThings account.",
-      "no_led_capability": "The selected device does not support LED control.",
-      "device_not_found": "The selected device could not be found. Please try again.",
-      "unknown": "An unexpected error occurred. Please try again."
+      "invalid_token_format": "That does not look like a SmartThings token (expected a 36-character UUID).",
+      "cannot_create_app": "Could not register the SmartApp. Check the token is valid and has not expired.",
+      "no_code_found": "No authorization code found in that URL. Paste the whole address, including the ?code= part.",
+      "exchange_failed": "SmartThings rejected the authorization code. It may have already been used or expired; start again."
     },
     "abort": {
-      "already_configured": "This device is already configured in Home Assistant.",
-      "single_instance_allowed": "Only one instance of this integration is allowed.",
-      "no_unconfigured_devices": "All compatible Samsung air conditioners are already configured in Home Assistant."
-    }
-  },
-  "entity": {
-    "light": {
-      "led": {
-        "name": "LED"
-      }
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Samsung AC LED Options", 
-        "description": "Configure how often Home Assistant checks the AC LED status. Lower values provide faster updates but may use more API requests.\n\nRecommended: 30 seconds for normal use, 10-15 seconds for frequent control.",
-        "data": {
-          "scan_interval": "Update interval (5-300 seconds)"
-        }
-      }
+      "cannot_connect": "Could not reach SmartThings.",
+      "no_compatible_devices": "No air conditioners with display LED control were found on this account.",
+      "already_configured": "That air conditioner is already set up."
     }
   }
 }

@@ -2,15 +2,16 @@
 
 DOMAIN = "smarter_samsung_ac_led"
 
-# Configuration keys
-CONF_TOKEN = "token"
+# OAuth credentials stored on the config entry. A Personal Access Token is used
+# only during setup; see oauth.py.
+CONF_CLIENT_ID = "client_id"
+CONF_CLIENT_SECRET = "client_secret"
+CONF_REFRESH_TOKEN = "refresh_token"
+CONF_ACCESS_TOKEN = "access_token"
+CONF_EXPIRES_AT = "expires_at"
+CONF_APP_NAME = "app_name"
+
 CONF_DEVICE_ID = "device_id"
-CONF_SCAN_INTERVAL = "scan_interval"
+CONF_DEVICE_NAME = "device_name"
 
-# Default values
 DEFAULT_NAME = "Smarter Samsung AC LED"
-DEFAULT_SCAN_INTERVAL = 10  # seconds
-
-# Scan interval limits
-MIN_SCAN_INTERVAL = 5   # seconds
-MAX_SCAN_INTERVAL = 300 # seconds
