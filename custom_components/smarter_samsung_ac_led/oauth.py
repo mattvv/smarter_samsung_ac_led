@@ -27,9 +27,12 @@ TOKEN_URL = f"{API_BASE}/oauth/token"
 # r: read device state, x: execute commands. Both are required for the LED.
 SCOPES = ["r:devices:*", "x:devices:*"]
 
-# The redirect target never has to resolve -- the user copies the resulting URL
-# out of the address bar and pastes it back into the config flow.
-REDIRECT_URI = "http://localhost:8123/smarter_samsung_ac_led/callback"
+# SmartThings accepts an http:// redirect URI when the app is registered but
+# rejects it at /oauth/authorize with a bare 403 -- no consent screen, no error
+# detail. The redirect must be https. This is Home Assistant's own public OAuth
+# redirect helper; nothing needs to be listening, because the user copies the
+# resulting URL out of the address bar and pastes it back into the config flow.
+REDIRECT_URI = "https://my.home-assistant.io/redirect/oauth"
 
 # Refresh this far before actual expiry so a command never races the deadline.
 EXPIRY_MARGIN = 300
