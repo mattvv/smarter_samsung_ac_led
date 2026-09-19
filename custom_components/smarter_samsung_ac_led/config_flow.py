@@ -51,6 +51,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._app: dict[str, str] = {}
         self._tokens: dict[str, Any] = {}
         self._devices: list[dict[str, Any]] = []
+        self._reauth_entry: config_entries.ConfigEntry | None = None
 
     # ------------------------------------------------------------- step 1
 
@@ -103,6 +104,16 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     _LOGGER.error("Code exchange failed: %s", err)
                     errors["base"] = "exchange_failed"
                 else:
+                    if self._reauth_entry is not None:
+                        return self.async_update_reload_and_abort(
+                            self._reauth_entry,
+                            data={
+                                **self._reauth_entry.data,
+                                CONF_REFRESH_TOKEN: self._tokens["refresh_token"],
+                                CONF_ACCESS_TOKEN: self._tokens["access_token"],
+                                CONF_EXPIRES_AT: self._tokens["expires_at"],
+                            },
+                        )
                     return await self.async_step_pick_device()
 
         return self.async_show_form(
@@ -111,6 +122,23 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={"authorize_url": authorize_url},
         )
+
+    # ------------------------------------------------------------- reauth
+
+    async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
+        """Re-run the authorize step when the stored refresh token has died.
+
+        The SmartApp registered at setup is still valid, so no PAT is needed --
+        only a fresh approval to mint a new refresh token for the same entry.
+        """
+        self._reauth_entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"]
+        )
+        self._app = {
+            "client_id": entry_data[CONF_CLIENT_ID],
+            "client_secret": entry_data[CONF_CLIENT_SECRET],
+        }
+        return await self.async_step_authorize()
 
     # ------------------------------------------------------------- step 4
 

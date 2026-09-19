@@ -73,13 +73,18 @@ class SmartThingsController:
         if tokens.get("refresh_token"):
             self._refresh_token = tokens["refresh_token"]
         if self._token_saver:
-            self._token_saver(
-                {
-                    "access_token": self._access_token,
-                    "refresh_token": self._refresh_token,
-                    "expires_at": self._expires_at,
-                }
-            )
+            # The refresh itself succeeded, so a failed save must not take the
+            # pending API call down with it.
+            try:
+                self._token_saver(
+                    {
+                        "access_token": self._access_token,
+                        "refresh_token": self._refresh_token,
+                        "expires_at": self._expires_at,
+                    }
+                )
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Could not persist the refreshed SmartThings tokens")
         _LOGGER.debug("Refreshed SmartThings access token")
         return self._access_token
 

@@ -31,7 +31,8 @@
     "abort": {
       "cannot_connect": "Could not reach SmartThings.",
       "no_compatible_devices": "No air conditioners with display LED control were found on this account.",
-      "already_configured": "That air conditioner is already set up."
+      "already_configured": "That air conditioner is already set up.",
+      "reauth_successful": "SmartThings access was renewed."
     }
   }
 }

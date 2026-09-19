@@ -5,7 +5,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 
 from .const import (
@@ -27,13 +27,8 @@ PLATFORMS = [Platform.LIGHT]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Samsung AC LED Controller from a config entry."""
 
-    def _save_tokens(tokens: dict) -> None:
-        """Persist rotated OAuth tokens back onto the config entry.
-
-        SmartThings issues a new refresh token on every refresh and invalidates
-        the old one, so failing to store this would break the integration on the
-        following refresh.
-        """
+    @callback
+    def _update_entry(tokens: dict) -> None:
         hass.config_entries.async_update_entry(
             entry,
             data={
@@ -43,6 +38,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 CONF_EXPIRES_AT: tokens["expires_at"],
             },
         )
+
+    def _save_tokens(tokens: dict) -> None:
+        """Persist rotated OAuth tokens back onto the config entry.
+
+        SmartThings issues a new refresh token on every refresh and invalidates
+        the old one, so failing to store this would break the integration on the
+        following refresh.
+
+        The controller refreshes from inside an executor job, and config entries
+        may only be updated from the event loop, so hand the write over to it.
+        """
+        hass.loop.call_soon_threadsafe(_update_entry, tokens)
 
     controller = SmartThingsController(
         client_id=entry.data[CONF_CLIENT_ID],
